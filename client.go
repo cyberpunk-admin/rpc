@@ -18,12 +18,12 @@ import (
 
 // Call represents a active RPC
 type Call struct {
-	seq				uint64
-	ServiceMethod	string
-	Args			interface{}
-	Reply			interface{}
-	Error			error
-	Done			chan *Call		// Strobes when call is complete
+	Seq           uint64
+	ServiceMethod string
+	Args          interface{}
+	Reply         interface{}
+	Error         error
+	Done          chan *Call // Strobes when call is complete
 }
 
 func (call *Call) done() {
@@ -35,15 +35,15 @@ func (call *Call) done() {
 // With a single Client, and a Client may be used by
 // multiple goroutines simultaneously
 type Client struct {
-	cc				codec.Codec
-	opt 			*Option
-	sending 		sync.Mutex
-	header			codec.Header
-	mu				sync.Mutex
-	seq				uint64
-	pending			map[uint64]*Call
-	closing			bool		// when user has call Close
-	shutdown		bool		// server has told us to stop
+	cc       codec.Codec
+	opt      *Option
+	sending  sync.Mutex
+	header   codec.Header
+	mu       sync.Mutex
+	seq      uint64
+	pending  map[uint64]*Call
+	closing  bool // when user has call Close
+	shutdown bool // server has told us to stop
 }
 
 var _ io.Closer = (*Client)(nil)
@@ -67,6 +67,7 @@ func (client *Client) IsAvailable() bool {
 	defer client.mu.Unlock()
 	return !client.shutdown && !client.closing
 }
+
 // registerCall is not an export method
 func (client *Client) registerCall(call *Call) (uint64, error) {
 	client.mu.Lock()
@@ -74,10 +75,10 @@ func (client *Client) registerCall(call *Call) (uint64, error) {
 	if client.closing || client.shutdown {
 		return 0, ErrShutdown
 	}
-	call.seq = client.seq
+	call.Seq = client.seq
 	client.pending[client.seq] = call
 	client.seq++
-	return call.seq, nil
+	return call.Seq, nil
 }
 
 func (client *Client) removeCall(seq uint64) *Call {
@@ -88,7 +89,7 @@ func (client *Client) removeCall(seq uint64) *Call {
 	return call
 }
 
-func (client *Client) terminateCalls(err error){
+func (client *Client) terminateCalls(err error) {
 	client.sending.Lock()
 	defer client.sending.Unlock()
 	client.mu.Lock()
@@ -150,7 +151,7 @@ func (client *Client) received() {
 		default:
 			err = client.cc.ReadBody(call.Reply)
 			if err != nil {
-				call.Error = errors.New("read body :" +  err.Error())
+				call.Error = errors.New("read body :" + err.Error())
 			}
 			call.done()
 		}
@@ -164,14 +165,14 @@ func (client *Client) received() {
 func (client *Client) Go(serviceMethod string, args, reply interface{}, done chan *Call) *Call {
 	if done == nil {
 		done = make(chan *Call, 10)
-	}else if cap(done) == 0 {
+	} else if cap(done) == 0 {
 		log.Panic("rpc client: done channel is unbuffered")
 	}
 	call := &Call{
 		ServiceMethod: serviceMethod,
-		Args: args,
-		Reply: reply,
-		Done: done,
+		Args:          args,
+		Reply:         reply,
+		Done:          done,
 	}
 	client.send(call)
 	return call
@@ -180,10 +181,10 @@ func (client *Client) Go(serviceMethod string, args, reply interface{}, done cha
 // Call invokes the named function, waits for it to complete
 // and returns its error status
 func (client *Client) Call(ctx context.Context, serviceMethod string, args, reply interface{}) error {
-	call := <- client.Go(serviceMethod, args, reply, make(chan *Call, 1)).Done
+	call := client.Go(serviceMethod, args, reply, make(chan *Call, 1))
 	select {
 	case <-ctx.Done():
-		client.removeCall(call.seq)
+		client.removeCall(call.Seq)
 		return errors.New("rpc client: call failed: " + ctx.Err().Error())
 	case call := <-call.Done:
 		return call.Error
@@ -214,7 +215,7 @@ func NewClient(conn net.Conn, opt *Option) (*Client, error) {
 	}
 	// send option with server
 	if err := json.NewEncoder(conn).Encode(opt); err != nil {
-		log.Println("rpc client: options error: ",err)
+		log.Println("rpc client: options error: ", err)
 		_ = conn.Close()
 		return nil, err
 	}
@@ -223,10 +224,10 @@ func NewClient(conn net.Conn, opt *Option) (*Client, error) {
 
 func newClientCodec(cc codec.Codec, opt *Option) *Client {
 	client := &Client{
-		seq: 		1,
-		cc :		cc,
-		opt: 		opt,
-		pending:	make(map[uint64]*Call),
+		seq:     1,
+		cc:      cc,
+		opt:     opt,
+		pending: make(map[uint64]*Call),
 	}
 	go client.received()
 	return client
@@ -234,7 +235,7 @@ func newClientCodec(cc codec.Codec, opt *Option) *Client {
 
 type clientResult struct {
 	client *Client
-	err  	error
+	err    error
 }
 
 type newClientFunc func(conn net.Conn, opt *Option) (client *Client, err error)
@@ -256,24 +257,23 @@ func dialTimeOut(f newClientFunc, network, address string, opts ...*Option) (cli
 	}()
 	ch := make(chan clientResult)
 	go func() {
-		client, err = f(conn, opt)
+		client, err := f(conn, opt)
 		ch <- clientResult{
 			client: client,
-			err: err,
+			err:    err,
 		}
 	}()
 	if opt.ConnectTimeOut == 0 {
-		result := <- ch
+		result := <-ch
 		return result.client, result.err
 	}
 	select {
 	case <-time.After(opt.ConnectTimeOut):
-		return nil, errors.New(fmt.Sprintf("rpc client: connect time out expect within %s", opt.ConnectTimeOut))
+		return nil, errors.New(fmt.Sprintf("rpc client: connect timeout expect within %s", opt.ConnectTimeOut))
 	case result := <-ch:
 		return result.client, result.err
 	}
 }
-
 
 // Dial connects to an RPC server at the specified network address
 func Dial(network, address string, opts ...*Option) (client *Client, err error) {
@@ -304,7 +304,8 @@ func DialHTTP(network, address string, opts ...*Option) (*Client, error) {
 // XDial calls different function to connect to an RPC server
 // according the first parameter rpcAddr.
 // rpcAddr is a general format (protocol@addr) to represent a rpc server
-func XDial(rpcAddr string, opts ...*Option) (*Client, error){
+// for example http@127.0.0.1, tcp@10.0.0.1, unix@/tmp/geerpc.sock
+func XDial(rpcAddr string, opts ...*Option) (*Client, error) {
 	part := strings.Split(rpcAddr, "@")
 	if len(part) != 2 {
 		return nil, fmt.Errorf("roc client err: wrong format '%s', expected protocol@addr", rpcAddr)

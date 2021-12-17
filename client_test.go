@@ -12,7 +12,7 @@ import (
 
 type Bar int
 
-func (b *Bar) TimeOut(args Args, reply *int) error {
+func (b Bar) TimeOut(args int, reply *int) error {
 	time.Sleep(time.Second * 2)
 	return nil
 }
@@ -33,10 +33,11 @@ func TestClient_dialTimeOut(t *testing.T) {
 	f := func(conn net.Conn, opt *Option) (Client *Client, err error) {
 		_ = conn.Close()
 		time.Sleep(time.Second * 2)
-		return
+		return nil, nil
 	}
 	t.Run("timeout", func(t *testing.T) {
 		_, err := dialTimeOut(f, "tcp", l.Addr().String(), &Option{ConnectTimeOut: time.Second})
+		//fmt.Println("[error]:", err.Error())
 		_assert(err != nil && strings.Contains(err.Error(), "connect timeout"), "expect a timeout error")
 	})
 	t.Run("0", func(t *testing.T) {
@@ -64,7 +65,7 @@ func TestClient_Call(t *testing.T) {
 		})
 		var reply int
 		err := client.Call(context.Background(), "Bar.TimeOut", 1, &reply)
-		_assert(err != nil && strings.Contains(err.Error(), "handle timeOut"), "expect a time out error2")
+		_assert(err != nil && strings.Contains(err.Error(), "handle timeout"), "expect a time out error2")
 	})
 }
 

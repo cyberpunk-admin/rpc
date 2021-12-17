@@ -139,8 +139,8 @@ func (server *Server) readRequest(cc codec.Codec) (*request, error) {
 	}
 	req.argv, req.replyv = req.mType.newArgv(), req.mType.newReplyv()
 
-	// make sure the argi is a pointer, ReadBody need a pointer as parameter
 	argi := req.argv.Interface()
+	// make sure the argi is a pointer, ReadBody need a pointer as parameter
 	if req.argv.Type().Kind() != reflect.Ptr {
 		argi = req.argv.Addr().Interface()
 	}
@@ -165,11 +165,11 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 	sented := make(chan struct{})
 	go func() {
 		err := req.svc.call(req.mType, req.argv, req.replyv)
-		select {
-		case called <- struct{}{}:
-		default:
-			return
-		}
+		//select {
+		//case called <- struct{}{}:
+		//default:
+		//	return
+		//}
 		if err != nil {
 			req.h.Error = err.Error()
 			server.sendResponse(cc, req.h, invalidRequest, sending)
@@ -249,12 +249,12 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	server.ServerConn(conn)
 }
 
-// HandleHTTP register a HTTP handler for RPC messages on rpcPath,
+// HandleHTTP register an HTTP handler for RPC messages on rpcPath,
 // and a debug handler on debugPath.
 // It is still necessary to invoke http.Serve(), typically in a go statement
 func (server *Server) HandleHTTP() {
 	http.Handle(defaultRPCPath, server)
-	//http.Handle(defaultDebugPath, debugHTTP{server})
+	http.Handle(defaultDebugPath, debugHTTP{server})
 	log.Println("rpc server debug path: ",defaultDebugPath)
 }
 
