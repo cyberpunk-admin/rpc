@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"geerpc"
 	"log"
 	"net"
@@ -30,7 +31,7 @@ func startServer(addr chan string) {
 	if err = geerpc.Register(&foo); err != nil {
 		log.Fatal("register error: ", err)
 	}
-
+	geerpc.HandleHTTP()
 	log.Println("start server on address: ", l.Addr())
 	addr <- l.Addr().String()
 	_ = http.Serve(l, nil)
@@ -38,7 +39,11 @@ func startServer(addr chan string) {
 
 
 func call(addrCH chan string) {
-	client, _ := geerpc.DialHTTP("tcp", <-addrCH)
+	client, err := geerpc.DialHTTP("tcp", <-addrCH)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 	defer func() { _ = client.Close() }()
 	time.Sleep(time.Second)
 
@@ -55,7 +60,7 @@ func call(addrCH chan string) {
 			if err:= client.Call(context.Background(), "Foo.Sum", args, &reply); err != nil {
 				log.Fatal("call Foo.Sum err ", err)
 			}
-			log.Println("%d + %d = %d", args.Num1, args.Num2, reply)
+			log.Printf("%d + %d = %d", args.Num1, args.Num2, reply)
 		}(i)
 	}
 	wg.Wait()

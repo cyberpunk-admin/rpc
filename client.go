@@ -289,6 +289,7 @@ func NewHTTPClient(conn net.Conn, opt *Option) (*Client, error) {
 	if err == nil && resp.Status == connected {
 		return NewClient(conn, opt)
 	}
+	fmt.Println(resp.Status )
 	if err == nil {
 		err = errors.New("unexpected HTTP response: " + resp.Status)
 	}

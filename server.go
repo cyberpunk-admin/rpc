@@ -81,7 +81,7 @@ func (server *Server) serverCodec(cc codec.Codec, opt *Option) {
 	sending := new(sync.Mutex)		// make sure to send a complete response
 	wg := new(sync.WaitGroup)		// wait until all request are handled
 	for {
-		req, err := server.readRequest(cc)
+		req, err := server.readRequest(cc	)
 		if err != nil {
 			if req == nil {
 				break 				// it is impossible to recover so break
@@ -228,7 +228,7 @@ func Register(rcvr interface{}) error {
 
 const (
 	connected 			= "200 Connected to Gee RPC"
-	defaultRPCPath 		= "/_geerrpc_"
+	defaultRPCPath 		= "/_geerpc_"
 	defaultDebugPath 	= "/debug/geerpc"
 )
 
