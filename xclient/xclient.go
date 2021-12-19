@@ -100,7 +100,7 @@ func (xc *XClient) Broadcast(ctx context.Context, serviceMethod string, args, re
 				e = err
 				cancel()
 			}
-			if err != nil && !replyDone {
+			if err == nil && !replyDone {
 				reflect.ValueOf(reply).Elem().Set(reflect.ValueOf(cloneReply).Elem())
 				replyDone = true
 			}

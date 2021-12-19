@@ -76,7 +76,7 @@ func (client *Client) registerCall(call *Call) (uint64, error) {
 		return 0, ErrShutdown
 	}
 	call.Seq = client.seq
-	client.pending[client.seq] = call
+	client.pending[call.Seq] = call
 	client.seq++
 	return call.Seq, nil
 }
@@ -289,7 +289,7 @@ func NewHTTPClient(conn net.Conn, opt *Option) (*Client, error) {
 	if err == nil && resp.Status == connected {
 		return NewClient(conn, opt)
 	}
-	fmt.Println(resp.Status )
+	fmt.Println(resp.Status)
 	if err == nil {
 		err = errors.New("unexpected HTTP response: " + resp.Status)
 	}

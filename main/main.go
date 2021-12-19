@@ -104,7 +104,7 @@ func main() {
 	go startServer(ch2)
 	addr1 := <-ch1
 	addr2 := <-ch2
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second)
 	call(addr1, addr2)
 	broadcast(addr1, addr2)
 }

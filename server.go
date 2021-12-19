@@ -27,7 +27,7 @@ type Option struct {
 var DefaultOption = &Option{
 	MagicNumber: 	MagicNumber,
 	CodeType: 		codec.GobType,
-	ConnectTimeOut: time.Second * 10,
+	ConnectTimeOut: time.Second * 2,
 }
 
 // Server represents an RPC Server
@@ -43,9 +43,9 @@ func NewServer() *Server {
 // DefaultServer is the default instance of *Server
 var DefaultServer = NewServer()
 
-// ServerConn runs the server on a single connection
-// ServerConn blocks serving from the connection until the client hand up
-func (server *Server) ServerConn(conn io.ReadWriteCloser) {
+// ServeConn runs the server on a single connection
+// ServeConn blocks serving from the connection until the client hand up
+func (server *Server) ServeConn(conn io.ReadWriteCloser) {
 	defer func(){
 		_ = conn.Close()
 	}()
@@ -81,7 +81,7 @@ func (server *Server) serverCodec(cc codec.Codec, opt *Option) {
 	sending := new(sync.Mutex)		// make sure to send a complete response
 	wg := new(sync.WaitGroup)		// wait until all request are handled
 	for {
-		req, err := server.readRequest(cc	)
+		req, err := server.readRequest(cc)
 		if err != nil {
 			if req == nil {
 				break 				// it is impossible to recover so break
@@ -139,12 +139,12 @@ func (server *Server) readRequest(cc codec.Codec) (*request, error) {
 	}
 	req.argv, req.replyv = req.mType.newArgv(), req.mType.newReplyv()
 
-	argi := req.argv.Interface()
+	argvi := req.argv.Interface()
 	// make sure the argi is a pointer, ReadBody need a pointer as parameter
 	if req.argv.Type().Kind() != reflect.Ptr {
-		argi = req.argv.Addr().Interface()
+		argvi = req.argv.Addr().Interface()
 	}
-	if err = cc.ReadBody(argi); err != nil {
+	if err = cc.ReadBody(argvi); err != nil {
 		log.Println("rpc server: read argv error: ", err)
 		return req, err
 	}
@@ -165,11 +165,7 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 	sented := make(chan struct{})
 	go func() {
 		err := req.svc.call(req.mType, req.argv, req.replyv)
-		//select {
-		//case called <- struct{}{}:
-		//default:
-		//	return
-		//}
+		called <- struct{}{}
 		if err != nil {
 			req.h.Error = err.Error()
 			server.sendResponse(cc, req.h, invalidRequest, sending)
@@ -202,7 +198,7 @@ func (server *Server) Accept(lis net.Listener) {
 			log.Println("rpc server: accept error, ", err)
 			return
 		}
-		go server.ServerConn(conn)
+		go server.ServeConn(conn)
 	}
 }
 
@@ -246,7 +242,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	_, _ = io.WriteString(conn, "HTTP/1.0 " + connected + "\n\n")
-	server.ServerConn(conn)
+	server.ServeConn(conn)
 }
 
 // HandleHTTP register an HTTP handler for RPC messages on rpcPath,
