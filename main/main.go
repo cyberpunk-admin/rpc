@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"geerpc"
+	"geerpc/register"
 	"geerpc/xclient"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -28,13 +30,21 @@ func (foo Foo) Sleep(args Args, reply *int) error {
 	return nil
 }
 
-func startServer(addrCH chan string) {
+func startRegister(wg *sync.WaitGroup) {
+	l, _ := net.Listen("tcp", ":9999")
+	register.HandleHTTP()
+	wg.Done()
+	_ = http.Serve(l, nil)
+}
+
+func startServer(registerAddr string, wg *sync.WaitGroup) {
 	var foo Foo
 	l, _ := net.Listen("tcp", ":0")
 	log.Println("start server on address: ", l.Addr())
 	server := geerpc.NewServer()
 	_ = server.Register(&foo)
-	addrCH <- l.Addr().String()
+	register.Heartbeat(registerAddr, "tcp@" + l.Addr().String(), 0)
+	wg.Done()
 	server.Accept(l)
 }
 
@@ -57,8 +67,8 @@ func foo(xc *xclient.XClient, ctx context.Context, typ, serviceMethod string, ar
 	return err
 }
 
-func call(addr1, addr2 string) {
-	d := xclient.NewMultiServersDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+func call(registerAddr string) {
+	d := xclient.NewGeeRegisterDiscovery(registerAddr, 0)
 	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
 	defer func() {_ = xc.Close()}()
 	// send request and receive response
@@ -73,8 +83,8 @@ func call(addr1, addr2 string) {
 	wg.Wait()
 }
 
-func broadcast(addr1, addr2 string) {
-	d := xclient.NewMultiServersDiscovery([]string{"tcp@" + addr1, "tcp@" + addr2})
+func broadcast(registerAddr string) {
+	d := xclient.NewGeeRegisterDiscovery(registerAddr, 0)
 	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
 	defer func() {_ = xc.Close()}()
 	// send request and receive response
@@ -85,7 +95,7 @@ func broadcast(addr1, addr2 string) {
 			defer wg.Done()
 			_ = foo(xc, context.Background(), "broadcast", "Foo.Sum", &Args{i, i*i})
 			// expect 2-5 timeout
-			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			ctx, _ := context.WithTimeout(context.Background(), time.Second)
 			_ = foo(xc, ctx, "broadcast", "Foo.Sleep", &Args{i, i*i})
 		}(i)
 	}
@@ -96,15 +106,20 @@ func broadcast(addr1, addr2 string) {
 
 func main() {
 	log.SetFlags(0)
-	ch1 := make(chan string)
-	ch2 := make(chan string)
+	registerAddr := "http://localhost:9999/_geerpc_/registry"
 
-	// start 2 servers
-	go startServer(ch1)
-	go startServer(ch2)
-	addr1 := <-ch1
-	addr2 := <-ch2
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go startRegister(&wg)
+	wg.Wait()
+
 	time.Sleep(time.Second)
-	call(addr1, addr2)
-	broadcast(addr1, addr2)
+	wg.Add(2)
+	go startServer(registerAddr, &wg)
+	go startServer(registerAddr, &wg)
+	wg.Wait()
+
+	time.Sleep(time.Second * 2)
+	call(registerAddr)
+	broadcast(registerAddr)
 }
